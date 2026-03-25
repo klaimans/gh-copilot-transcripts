@@ -24,7 +24,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 No publishing or registry needed — users just need access to the repo:
 
 ```bash
-uvx --from git+https://github.com/klaimans/gh-copilot-transcripts gh-copilot-transcripts
+uvx --from git+https://github.com/klaimans/gh-copilot-transcripts.git gh-copilot-transcripts
 ```
 
 Pin to a specific tag:
@@ -43,38 +43,56 @@ uv run gh-copilot-transcripts
 
 ## Usage
 
-### Interactive mode (default)
+### Commands
+
+#### Interactive mode (default)
 
 ```bash
 gh-copilot-transcripts
 ```
 
-Opens an interactive picker to select a session. Options:
+Opens an interactive picker to select a session from your local VS Code workspaceStorage.
 
-| Flag | Description |
-|------|-------------|
-| `-o` / `--output PATH` | Output directory (default: `./_transcripts`) |
-| `--open` | Open the result in your browser |
-| `--gist` | Upload to GitHub Gist for sharing |
-| `--json` | Copy the source `.jsonl` alongside the HTML |
-| `-p` / `--project NAME` | Filter sessions by project name |
-| `--limit INT` | Max sessions to show (default: 50) |
-
-### Convert a specific JSONL file
+#### Convert a specific JSONL file
 
 ```bash
-gh-copilot-transcripts json path/to/session.jsonl -o output/ --open
+gh-copilot-transcripts json path/to/session.jsonl
 ```
 
-### Batch convert all sessions
+Converts a single Copilot session file to HTML.
+
+**Example:**
+
+```bash
+gh-copilot-transcripts json ~/path/to/session.jsonl -o output/ --open --gist
+```
+
+#### Batch convert all sessions
+
+```bash
+gh-copilot-transcripts all
+```
+
+Discovers all Copilot sessions in your local VS Code workspaceStorage and generates a browseable archive with a master index, per-project indexes, and paginated session transcripts.
+
+**Example:**
 
 ```bash
 gh-copilot-transcripts all -o archive/ --open
 ```
 
-Generates a three-level hierarchy: master index → project indexes → paginated session transcripts.
+### Options
 
-Use `--dry-run` to preview what would be generated.
+| Flag | Description | Available for |
+|------|-------------|---|
+| `-o, --output PATH` | Output directory (default: `./_transcripts`) | `local`, `json`, `all` |
+| `--open` | Open the result in your browser | `local`, `json`, `all` |
+| `--gist` | Upload to GitHub Gist and output a gisthost.github.io preview URL | `local`, `json` |
+| `--json` | Copy the source `.jsonl` file to the output directory | `local`, `json` |
+| `-p, --project NAME` | Filter sessions by project name | `local` |
+| `--limit INT` | Maximum number of sessions to show (default: 50) | `local` |
+| `--dry-run` | Show what would be generated without creating files | `all` |
+| `-q, --quiet` | Suppress progress output | `all` |
 
 ## Agent skill: session-diagnostics
 

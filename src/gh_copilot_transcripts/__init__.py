@@ -1235,23 +1235,41 @@ def cli():
 
 
 @cli.command()
-@click.option("-o", "--output", type=click.Path(), help="Output directory")
-@click.option("--open", "open_browser", is_flag=True, help="Open in browser")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    help="Output directory (default: ./_transcripts)",
+)
+@click.option(
+    "--open",
+    "open_browser",
+    is_flag=True,
+    help="Open the generated HTML in your browser",
+)
 @click.option(
     "--gist",
     is_flag=True,
-    help="Upload to GitHub Gist and output a gisthost.github.io URL.",
+    help="Upload to GitHub Gist and output a gisthost.github.io preview URL",
 )
 @click.option(
     "--json",
     "include_json",
     is_flag=True,
-    help="Copy source JSONL file to output directory.",
+    help="Copy source JSONL file to the output directory",
 )
-@click.option("--project", "-p", help="Filter by project name")
-@click.option("--limit", type=int, default=50, help="Max sessions to show")
+@click.option("--project", "-p", help="Filter sessions by project name")
+@click.option(
+    "--limit",
+    type=int,
+    default=50,
+    help="Maximum number of sessions to show (default: 50)",
+)
 def local(output, open_browser, gist, include_json, project, limit):
-    """Select from local Copilot chat sessions (default command)."""
+    """Select and convert a local Copilot chat session (default command).
+
+    Opens an interactive picker to choose from your VS Code workspaceStorage sessions.
+    """
     import questionary
 
     projects = find_all_sessions()
@@ -1314,21 +1332,34 @@ def local(output, open_browser, gist, include_json, project, limit):
 
 @cli.command("json")
 @click.argument("path")
-@click.option("-o", "--output", type=click.Path(), help="Output directory")
-@click.option("--open", "open_browser", is_flag=True, help="Open in browser")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    help="Output directory (default: ./_transcripts)",
+)
+@click.option(
+    "--open",
+    "open_browser",
+    is_flag=True,
+    help="Open the generated HTML in your browser",
+)
 @click.option(
     "--gist",
     is_flag=True,
-    help="Upload to GitHub Gist and output a gisthost.github.io URL.",
+    help="Upload to GitHub Gist and output a gisthost.github.io preview URL",
 )
 @click.option(
     "--json",
     "include_json",
     is_flag=True,
-    help="Copy source JSONL file to output directory.",
+    help="Copy source JSONL file to the output directory",
 )
 def json_cmd(path, output, open_browser, gist, include_json):
-    """Convert a specific JSONL file to HTML."""
+    """Convert a specific Copilot JSONL session file to HTML.
+
+    PATH: Path to the .jsonl session file to convert
+    """
     session_path = Path(path)
     if not session_path.exists():
         raise click.ClickException(f"File not found: {path}")
@@ -1359,12 +1390,30 @@ def json_cmd(path, output, open_browser, gist, include_json):
 
 
 @cli.command()
-@click.option("-o", "--output", type=click.Path(), help="Output directory")
-@click.option("--open", "open_browser", is_flag=True, help="Open in browser")
-@click.option("--dry-run", is_flag=True, help="Show what would be generated")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    help="Output directory (default: ./_transcripts)",
+)
+@click.option(
+    "--open",
+    "open_browser",
+    is_flag=True,
+    help="Open the generated master index in your browser",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be generated without creating files",
+)
 @click.option("-q", "--quiet", is_flag=True, help="Suppress progress output")
 def all(output, open_browser, dry_run, quiet):
-    """Batch convert all local sessions to a browseable HTML archive."""
+    """Batch convert all local Copilot sessions to a browseable HTML archive.
+
+    Discovers all sessions in VS Code's workspaceStorage and generates a three-level
+    hierarchy: master index → project indexes → paginated session transcripts.
+    """
     projects = find_all_sessions()
     if not projects:
         raise click.ClickException("No Copilot chat sessions found.")
