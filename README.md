@@ -24,20 +24,20 @@ Requires [uv](https://docs.astral.sh/uv/).
 No publishing or registry needed — users just need access to the repo:
 
 ```bash
-uvx --from git+https://github.com/https://github.com/gh-copilot-transcripts gh-copilot-transcripts
+uvx --from git+https://github.com/klaimans/gh-copilot-transcripts gh-copilot-transcripts
 ```
 
 Pin to a specific tag:
 
 ```bash
-uvx --from "gh-copilot-transcripts @ git+https://github.com/gh-copilot-transcripts@v0.1" gh-copilot-transcripts
+uvx --from "gh-copilot-transcripts @ git+https://github.com/klaimans/gh-copilot-transcripts@v0.1" gh-copilot-transcripts
 ```
 
 ### From a local clone
 
 ```bash
-git clone https://github.com/YOUR_ORG/gh-code-transcripts
-cd gh-code-transcripts
+git clone https://github.com/klaimans/gh-copilot-transcripts
+cd gh-copilot-transcripts
 uv run gh-copilot-transcripts
 ```
 
