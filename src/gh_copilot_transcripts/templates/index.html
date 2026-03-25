@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}GitHub Copilot transcript - Index{% endblock %}
+
+{% block content %}
+        <div class="header-row">
+            <h1>GitHub Copilot transcript</h1>
+        </div>
+        {{ pagination_html|safe }}
+        <p style="color: var(--text-muted); margin-bottom: 24px;">{{ prompt_count }} prompts · {{ total_tool_calls }} tool calls · {{ total_pages }} pages{% if session_title %} · <em>{{ session_title }}</em>{% endif %}</p>
+        {{ index_items_html|safe }}
+        {{ pagination_html|safe }}
+{%- endblock %}

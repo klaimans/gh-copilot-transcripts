@@ -1,0 +1,29 @@
+[project]
+name = "gh-copilot-transcripts"
+version = "0.1"
+description = "Convert GitHub Copilot chat sessions to HTML transcripts"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "click",
+    "click-default-group",
+    "jinja2",
+    "markdown",
+    "questionary",
+]
+
+[project.scripts]
+gh-copilot-transcripts = "gh_copilot_transcripts:cli"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=6.0.0",
+    "syrupy>=5.0.0",
+    "ruff>=0.15.5",
+]

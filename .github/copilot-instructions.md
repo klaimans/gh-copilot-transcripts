@@ -1,0 +1,15 @@
+  ## MUST-DOs
+  - ALWAYS start with a red/green TDD approach when implementing new features or fixing bugs. This means writing a failing test first, then writing the minimum code necessary to make the test pass, and finally refactoring the code while ensuring the test still passes.
+  - When BRAINSTORMING, do not change code yet. Focus on generating ideas and solutions. Only start coding once you have a clear plan of action.
+  - Unless requested or indicated by an attached file use python3
+  - ALWAYS try and use python from the virtual environment at .venv if it exists
+  - Use context7 to get the latest documentation
+  - ALWAYS follow the coding mantras YAGNI, KISS, and DRY
+  - Ensure code is efficient and clean
+  - Default to NO comments unless an absolute must. Prefer self-explanatory code and clear naming.
+  - Unless specifically mentioned, DO NOT make the changes backwards compatible
+  - If asked to write tests, use pytest and ONLY add meaningful tests that add value and target edge cases and possible fail-points
+  - If asked to write docstrings, use the Google style
+  - ALWAYS chack that you have followed ALL the instructions above
+  - ALWAYS use the file editing tools instead of terminal commands to edit files
+  - ONLY add tests which test actual functionality and edge casees. DO NOT add tests to check exception raising or environment variable handling unless specifically asked to do so. Focus on testing the core functionality and edge cases of the code.

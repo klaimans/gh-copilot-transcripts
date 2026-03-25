@@ -1,0 +1,290 @@
+{# Pagination for regular pages #}
+{% macro pagination(current_page, total_pages) %}
+{% if total_pages <= 1 %}
+<div class="pagination"><a href="index.html" class="index-link">Index</a></div>
+{%- else %}
+<div class="pagination">
+<a href="index.html" class="index-link">Index</a>
+{% if current_page > 1 -%}
+<a href="page-{{ '%03d'|format(current_page - 1) }}.html">&larr; Prev</a>
+{%- else -%}
+<span class="disabled">&larr; Prev</span>
+{%- endif %}
+{% for page in range(1, total_pages + 1) -%}
+{% if page == current_page -%}
+<span class="current">{{ page }}</span>
+{%- else -%}
+<a href="page-{{ '%03d'|format(page) }}.html">{{ page }}</a>
+{%- endif %}
+{% endfor -%}
+{% if current_page < total_pages -%}
+<a href="page-{{ '%03d'|format(current_page + 1) }}.html">Next &rarr;</a>
+{%- else -%}
+<span class="disabled">Next &rarr;</span>
+{%- endif %}
+</div>
+{%- endif %}
+{% endmacro %}
+
+{# Pagination for index page #}
+{% macro index_pagination(total_pages) %}
+{% if total_pages < 1 %}
+<div class="pagination"><span class="current">Index</span></div>
+{%- else %}
+<div class="pagination">
+<span class="current">Index</span>
+<span class="disabled">&larr; Prev</span>
+{% for page in range(1, total_pages + 1) -%}
+<a href="page-{{ '%03d'|format(page) }}.html">{{ page }}</a>
+{% endfor -%}
+{% if total_pages >= 1 -%}
+<a href="page-001.html">Next &rarr;</a>
+{%- else -%}
+<span class="disabled">Next &rarr;</span>
+{%- endif %}
+</div>
+{%- endif %}
+{% endmacro %}
+
+{# Thinking block #}
+{% macro thinking(content_html) %}
+<div class="thinking"><div class="thinking-label">Thinking</div><div class="truncatable"><div class="truncatable-content">{{ content_html|safe }}</div></div></div>
+{%- endmacro %}
+
+{# Assistant text - content_html is pre-rendered markdown #}
+{% macro assistant_text(content_html) %}
+<div class="assistant-text">{{ content_html|safe }}</div>
+{%- endmacro %}
+
+{# User content #}
+{% macro user_content(content_html) %}
+<div class="user-content">{{ content_html|safe }}</div>
+{%- endmacro %}
+
+{# Generic tool invocation #}
+{% macro tool_invocation(tool_id, display_name, past_tense_msg, icon) %}
+<div class="tool-use" data-tool-id="{{ tool_id }}">
+<div class="tool-header"><span class="tool-icon">{{ icon }}</span> {{ display_name }}</div>
+{%- if past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Read file tool #}
+{% macro read_file_tool(past_tense_msg) %}
+<div class="tool-use read-tool">
+<div class="tool-header"><span class="tool-icon">📖</span> Read File</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Create file tool #}
+{% macro create_file_tool(past_tense_msg) %}
+<div class="file-tool write-tool">
+<div class="file-tool-header write-header"><span class="file-tool-icon">📝</span> Create File</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Create directory tool #}
+{% macro create_dir_tool(past_tense_msg) %}
+<div class="tool-use">
+<div class="tool-header"><span class="tool-icon">📁</span> Create Directory</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Replace / edit tool #}
+{% macro replace_tool(tool_name, past_tense_msg) %}
+<div class="file-tool edit-tool">
+<div class="file-tool-header edit-header"><span class="file-tool-icon">✏️</span> {{ tool_name }}</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Apply patch tool #}
+{% macro apply_patch_tool(past_tense_msg) %}
+<div class="file-tool edit-tool">
+<div class="file-tool-header edit-header"><span class="file-tool-icon">🩹</span> Apply Patch</div>
+{%- if past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Find files tool #}
+{% macro find_files_tool(past_tense_msg) %}
+<div class="tool-use search-tool">
+<div class="tool-header"><span class="tool-icon">🔍</span> Find Files</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Find text in files tool #}
+{% macro find_text_tool(past_tense_msg) %}
+<div class="tool-use search-tool">
+<div class="tool-header"><span class="tool-icon">🔎</span> Find in Files</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Search codebase tool #}
+{% macro search_codebase_tool(past_tense_msg) %}
+<div class="tool-use search-tool">
+<div class="tool-header"><span class="tool-icon">🔎</span> Search Codebase</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# List directory tool #}
+{% macro list_dir_tool(past_tense_msg) %}
+<div class="tool-use">
+<div class="tool-header"><span class="tool-icon">📂</span> List Directory</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Get errors tool #}
+{% macro get_errors_tool(past_tense_msg) %}
+<div class="tool-use">
+<div class="tool-header"><span class="tool-icon">⚠️</span> Check Errors</div>
+<div class="tool-description">{{ past_tense_msg }}</div>
+</div>
+{%- endmacro %}
+
+{# Terminal / run in terminal tool #}
+{% macro terminal_tool(command, past_tense_msg, output, exit_code) %}
+<div class="tool-use bash-tool">
+<div class="tool-header"><span class="tool-icon">$</span> Terminal{%- if exit_code is not none and exit_code != 0 %} <span class="exit-code">Exit code: {{ exit_code }}</span>{% endif %}</div>
+{%- if command %}
+<div class="truncatable"><div class="truncatable-content"><pre class="bash-command">{{ command }}</pre></div></div>
+{%- elif past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+{%- if output %}
+<div class="truncatable bash-output-wrap"><div class="truncatable-content"><pre class="bash-output">{{ output }}</pre></div></div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Run tests tool #}
+{% macro run_tests_tool(past_tense_msg) %}
+<div class="tool-use bash-tool">
+<div class="tool-header"><span class="tool-icon">🧪</span> Run Tests</div>
+{%- if past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Todo / manage todo list tool #}
+{% macro todo_tool(past_tense_msg, todo_items) %}
+<div class="todo-list">
+<div class="todo-header"><span class="todo-header-icon">☰</span> Task List</div>
+{%- if past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+{%- if todo_items %}
+<ul style="list-style: none; padding-left: 8px; margin: 8px 0;">
+{%- for item in todo_items %}
+{%- if item.status == 'completed' %}
+<li style="margin: 4px 0; color: #2e7d32;">✅ <s>{{ item.title }}</s></li>
+{%- elif item.status == 'in-progress' %}
+<li style="margin: 4px 0; color: #e65100;">🔄 <strong>{{ item.title }}</strong></li>
+{%- else %}
+<li style="margin: 4px 0; color: #757575;">⬜ {{ item.title }}</li>
+{%- endif %}
+{%- endfor %}
+</ul>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Fetch web page tool #}
+{% macro fetch_web_tool(past_tense_msg) %}
+<div class="tool-use">
+<div class="tool-header"><span class="tool-icon">🌐</span> Fetch Web Page</div>
+{%- if past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# GitHub repo search tool #}
+{% macro github_repo_tool(past_tense_msg) %}
+<div class="tool-use">
+<div class="tool-header"><span class="tool-icon">🐙</span> GitHub Repo Search</div>
+{%- if past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# MCP tool #}
+{% macro mcp_tool(tool_id, past_tense_msg, source) %}
+{%- set server_label = source.serverLabel if source else 'MCP' -%}
+{%- set tool_name = tool_id.split('_', 2)[-1] if '_' in tool_id else tool_id -%}
+<div class="tool-use mcp-tool">
+<div class="tool-header"><span class="tool-icon">🔌</span> {{ server_label }}: {{ tool_name }}</div>
+{%- if past_tense_msg %}
+<div class="tool-description">{{ past_tense_msg }}</div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Text edit group - file edits #}
+{% macro text_edit_group(file_path, edits, done) %}
+{%- set filename = file_path.split('/')[-1] if '/' in file_path else file_path -%}
+<div class="file-tool edit-tool">
+<div class="file-tool-header edit-header"><span class="file-tool-icon">✏️</span> Edit <span class="file-tool-path">{{ filename }}</span></div>
+<div class="file-tool-fullpath">{{ file_path }}</div>
+{%- if edits %}
+<div class="truncatable"><div class="truncatable-content">
+{%- for edit_group in edits %}
+{%- for edit in edit_group %}
+<div class="edit-section edit-new"><div class="edit-label">~</div><pre class="edit-content">{{ edit.text[:500] if edit.text else '' }}</pre></div>
+{%- endfor %}
+{%- endfor %}
+</div></div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Elicitation block #}
+{% macro elicitation_block(title, message, state) %}
+<div class="tool-use elicitation">
+<div class="tool-header"><span class="tool-icon">❓</span> {{ title }}</div>
+<div class="tool-description">{{ message }}</div>
+{%- if state %}
+<div class="tool-description"><em>{{ state }}</em></div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Confirmation block #}
+{% macro confirmation_block(title, message) %}
+<div class="tool-use confirmation">
+<div class="tool-header"><span class="tool-icon">⏸️</span> {{ title }}</div>
+{%- if message %}
+<div class="tool-description">{{ message }}</div>
+{%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Message wrapper #}
+{% macro message(role_class, role_label, msg_id, timestamp, content_html, model_id) %}
+<div class="message {{ role_class }}" id="{{ msg_id }}"><div class="message-header"><span class="role-label">{{ role_label }}</span><span class="message-meta">{%- if model_id %}<span class="model-badge">{{ model_id }}</span>{% endif %}<a href="#{{ msg_id }}" class="timestamp-link"><time datetime="{{ timestamp }}" data-timestamp="{{ timestamp }}">{{ timestamp }}</time></a></span></div><div class="message-content">{{ content_html|safe }}</div></div>
+{%- endmacro %}
+
+{# Index item (prompt) #}
+{% macro index_item(prompt_num, link, timestamp, rendered_content, stats_html) %}
+<div class="index-item"><a href="{{ link }}"><div class="index-item-header"><span class="index-item-number">#{{ prompt_num }}</span><time datetime="{{ timestamp }}" data-timestamp="{{ timestamp }}">{{ timestamp }}</time></div><div class="index-item-content">{{ rendered_content|safe }}</div></a>{{ stats_html|safe }}</div>
+{%- endmacro %}
+
+{# Index stats #}
+{% macro index_stats(tool_stats_str) %}
+{%- if tool_stats_str -%}
+<div class="index-item-stats"><span>{{ tool_stats_str }}</span></div>
+{%- endif %}
+{%- endmacro %}
