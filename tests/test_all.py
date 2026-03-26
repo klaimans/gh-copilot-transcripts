@@ -371,7 +371,7 @@ class TestLocalCommand:
             result = runner.invoke(cli, ["local", "-p", "nonexistent"])
 
         assert result.exit_code != 0
-        assert "No sessions found" in result.output
+        assert "No projects found matching" in result.output or "No sessions found" in result.output
 
 
 # --- version command tests ---

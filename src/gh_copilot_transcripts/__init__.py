@@ -420,31 +420,35 @@ def get_project_for_workspace(ws_dir):
     return uri
 
 
-def get_session_title(filepath):
-    """Extract a display title from a JSONL session file.
+def get_session_info(filepath):
+    """Extract a display title and request count from a JSONL session file.
 
-    Reconstructs just enough of the session to get the title,
-    checking customTitle first, then first request message text.
+    Reconstructs just enough of the session to get the title and
+    the number of actual un-empty user requests.
     """
     session = reconstruct_session(filepath)
 
-    title = session.get("customTitle")
-    if title:
-        return title
-
     requests = session.get("requests", [])
-    for req in requests:
-        if not isinstance(req, dict):
-            continue
-        msg = req.get("message", {})
-        if isinstance(msg, dict):
-            text = msg.get("text", "")
+    valid_requests = [
+        r for r in requests if isinstance(r, dict) and r.get("message", {}).get("text")
+    ]
+    request_count = len(valid_requests)
+
+    title = session.get("customTitle")
+    if not title:
+        for req in valid_requests:
+            text = req.get("message", {}).get("text", "")
             if text:
                 if len(text) > 100:
-                    return text[:100] + "..."
-                return text
+                    title = text[:100] + "..."
+                else:
+                    title = text
+                break
+        if not title:
+            title = "Untitled session"
 
-    return "Untitled session"
+    return title, request_count
+    return title, request_count
 
 
 def find_all_sessions(workspace_path=None):
@@ -490,12 +494,17 @@ def find_all_sessions(workspace_path=None):
         sessions = []
         for session_file in chat_dir.glob("*.jsonl"):
             try:
-                title = get_session_title(session_file)
+                title, request_count = get_session_info(session_file)
+                if request_count == 0:
+                    # Skip blank sessions created by VS Code before any prompts
+                    continue
+
                 stat = session_file.stat()
                 sessions.append(
                     {
                         "path": session_file,
                         "title": title,
+                        "requests": request_count,
                         "mtime": stat.st_mtime,
                         "size": stat.st_size,
                     }
@@ -524,7 +533,11 @@ def find_all_sessions(workspace_path=None):
                 "sessions": sessions,
             }
 
-    return sorted(projects.values(), key=lambda p: p["name"].lower())
+    return sorted(
+        projects.values(),
+        key=lambda p: p["sessions"][0]["mtime"] if p["sessions"] else 0,
+        reverse=True,
+    )
 
 
 # --- CSS and JS ---
@@ -856,7 +869,7 @@ def count_tools_in_response(response):
 # --- HTML Generation Pipeline ---
 
 
-def generate_html(session_path, output_dir):
+def generate_html(session_path, output_dir, page_prefix="page", generate_index=True):
     """Generate paginated HTML transcripts from a Copilot JSONL session file."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -885,7 +898,7 @@ def generate_html(session_path, output_dir):
             messages_html_parts.append(_render_request(req))
 
         macros = _get_macros()
-        pagination_html = macros.pagination(page_num, total_pages)
+        pagination_html = macros.pagination(page_num, total_pages, page_prefix=page_prefix)
 
         page_template = get_template("page.html")
         page_content = page_template.render(
@@ -893,14 +906,15 @@ def generate_html(session_path, output_dir):
             js=JS,
             page_num=page_num,
             total_pages=total_pages,
+            session_title=session_title if page_prefix != "page" else None,
             pagination_html=pagination_html,
             messages_html="".join(messages_html_parts),
         )
-        (output_dir / f"page-{page_num:03d}.html").write_text(
+        (output_dir / f"{page_prefix}-{page_num:03d}.html").write_text(
             page_content, encoding="utf-8"
         )
 
-    # Build index
+    # Build index data
     total_tool_counts = {}
     for req in requests:
         tool_counts = count_tools_in_response(req.get("response", []))
@@ -919,7 +933,7 @@ def generate_html(session_path, output_dir):
 
         page_num = (i // PROMPTS_PER_PAGE) + 1
         msg_id = make_msg_id(timestamp)
-        link = f"page-{page_num:03d}.html#{msg_id}"
+        link = f"{page_prefix}-{page_num:03d}.html#{msg_id}"
 
         rendered_content = render_markdown_text(user_text[:300] or "...")
 
@@ -932,25 +946,83 @@ def generate_html(session_path, output_dir):
         )
         index_items.append(item_html)
 
-    index_pagination = macros.index_pagination(total_pages)
-    index_template = get_template("index.html")
-    index_content = index_template.render(
-        css=CSS,
-        js=JS,
-        pagination_html=index_pagination,
-        prompt_count=total_requests,
-        total_tool_calls=total_tool_calls,
-        total_pages=total_pages,
-        session_title=session_title,
-        index_items_html="".join(index_items),
-    )
-    index_path = output_dir / "index.html"
-    index_path.write_text(index_content, encoding="utf-8")
+    index_path = None
+    if generate_index:
+        index_pagination = macros.index_pagination(total_pages, page_prefix=page_prefix)
+        index_template = get_template("index.html")
+        index_content = index_template.render(
+            css=CSS,
+            js=JS,
+            pagination_html=index_pagination,
+            prompt_count=total_requests,
+            total_tool_calls=total_tool_calls,
+            total_pages=total_pages,
+            session_title=session_title,
+            index_items_html="".join(index_items),
+        )
+        index_path = output_dir / "index.html"
+        index_path.write_text(index_content, encoding="utf-8")
 
     return {
         "total_requests": total_requests,
         "total_pages": total_pages,
         "total_tool_calls": total_tool_calls,
+        "index_items_html": index_items, # Pass items back for multi-session index
+        "index_path": index_path,
+    }
+
+
+def generate_multi_session_html(session_paths, output_dir, project_title=None):
+    """Generate HTML for multiple sessions into a single directory and unified index."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    all_index_items = []
+    total_reqs = 0
+    total_pgs = 0
+    total_tools = 0
+
+    # Render each session with a unique prefix (s1, s2, ...)
+    for idx, session_path in enumerate(session_paths):
+        prefix = f"s{idx + 1}"
+        session = reconstruct_session(session_path)
+        session_title = session.get("customTitle") or "Untitled session"
+        
+        # Add a section header into the index for this session
+        all_index_items.append(f"<h2 style='margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 8px;'>{session_title}</h2>")
+        
+        result = generate_html(
+            session_path, 
+            output_dir, 
+            page_prefix=prefix, 
+            generate_index=False
+        )
+        
+        all_index_items.extend(result["index_items_html"])
+        total_reqs += result["total_requests"]
+        total_pgs += result["total_pages"]
+        total_tools += result["total_tool_calls"]
+
+    # Generate combined index
+    index_template = get_template("index.html")
+    index_content = index_template.render(
+        css=CSS,
+        js=JS,
+        pagination_html="", # No index pagination needed for combined flat list
+        prompt_count=total_reqs,
+        total_tool_calls=total_tools,
+        total_pages=total_pgs,
+        session_title=project_title or "Multi-session View",
+        index_items_html="".join(all_index_items),
+    )
+    
+    index_path = output_dir / "index.html"
+    index_path.write_text(index_content, encoding="utf-8")
+    
+    return {
+        "total_requests": total_reqs,
+        "total_pages": total_pgs,
+        "total_tool_calls": total_tools,
         "index_path": index_path,
     }
 
@@ -1258,76 +1330,168 @@ def cli():
     is_flag=True,
     help="Copy source JSONL file to the output directory",
 )
-@click.option("--project", "-p", help="Filter sessions by project name")
+@click.option("--project", "-p", help="Filter sessions by project name (skips project picker)")
 @click.option(
     "--limit",
     type=int,
     default=50,
-    help="Maximum number of sessions to show (default: 50)",
+    help="Maximum number of sessions to show per project (default: 50)",
 )
 def local(output, open_browser, gist, include_json, project, limit):
     """Select and convert a local Copilot chat session (default command).
 
-    Opens an interactive picker to choose from your VS Code workspaceStorage sessions.
+    Opens a two-step interactive picker: first choose a project, then select
+    one or more sessions from that project.
     """
     import questionary
 
-    projects = find_all_sessions()
-    if not projects:
+    all_projects = find_all_sessions()
+    if not all_projects:
         raise click.ClickException(
             "No Copilot chat sessions found. Make sure VS Code workspace storage exists."
         )
 
-    # Build flat list of sessions with project info
-    choices = []
-    for proj in projects:
-        if project and project.lower() not in proj["name"].lower():
-            continue
-        for session in proj["sessions"]:
-            mtime = session.get("mtime", 0)
-            date_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-            size_kb = session.get("size", 0) / 1024
-            title = session.get("title", "Untitled")
-            label = f"[{proj['name']}] {title} ({date_str}, {size_kb:.0f} KB)"
-            choices.append(questionary.Choice(title=label, value=session["path"]))
-            if len(choices) >= limit:
-                break
-        if len(choices) >= limit:
-            break
+    # --- Step 1: project selection ---
+    # Apply --project filter if given
+    if project:
+        filtered = [p for p in all_projects if project.lower() in p["name"].lower()]
+        if not filtered:
+            raise click.ClickException(
+                f"No projects found matching: {project}"
+            )
+    else:
+        filtered = all_projects
 
-    if not choices:
-        raise click.ClickException(
-            f"No sessions found matching project filter: {project}"
-        )
+    if len(filtered) == 1:
+        # Only one project (or --project narrowed it down): skip project picker
+        chosen_project = filtered[0]
+    else:
+        # Build project choices ordered by most-recent session (already sorted)
+        project_choices = []
+        for proj in filtered:
+            most_recent = proj["sessions"][0]["mtime"] if proj["sessions"] else 0
+            date_str = datetime.datetime.fromtimestamp(most_recent).strftime("%Y-%m-%d")
+            label = f"{proj['name']}  ({len(proj['sessions'])} sessions · last: {date_str})"
+            project_choices.append(questionary.Choice(title=label, value=proj))
 
-    selected = questionary.select("Select a session:", choices=choices).ask()
+        chosen_project = questionary.select(
+            "Select a project:", choices=project_choices
+        ).ask()
+        if chosen_project is None:
+            return
 
-    if selected is None:
+    # --- Step 2: session selection ---
+    sessions = chosen_project["sessions"][:limit]
+
+    _MULTI_SELECT = "__multi_select__"
+
+    # Build labels once, reuse for both select and checkbox
+    def _session_label(session):
+        mtime = session.get("mtime", 0)
+        date_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+        size_kb = session.get("size", 0) / 1024
+        title = session.get("title", "Untitled")
+        req_count = session.get("requests", 0)
+        req_label = f"{req_count} req{'s' if req_count != 1 else ''}"
+        return f"{title}  ({date_str}, {req_label}, {size_kb:.0f} KB)"
+
+    single_choices = [
+        questionary.Choice(title="✓  Select multiple sessions...", value=_MULTI_SELECT)
+    ] + [
+        questionary.Choice(title=_session_label(s), value=s["path"]) for s in sessions
+    ]
+
+    single_selected = questionary.select(
+        f"Select a session from '{chosen_project['name']}':",
+        choices=single_choices,
+    ).ask()
+
+    if single_selected is None:
         return
+
+    if single_selected == _MULTI_SELECT:
+        # Multi-select mode via checkbox
+        _SELECT_ALL = "__select_all__"
+        multi_choices = [
+            questionary.Choice(title="★  Select all sessions", value=_SELECT_ALL)
+        ] + [
+            questionary.Choice(title=_session_label(s), value=s["path"])
+            for s in sessions
+        ]
+        selected_values = questionary.checkbox(
+            f"Select sessions from '{chosen_project['name']}':",
+            instruction="(Space to toggle, Enter to confirm, Ctrl+A to select all)",
+            choices=multi_choices,
+        ).ask()
+
+        if not selected_values:
+            click.echo("No sessions selected.")
+            return
+
+        if _SELECT_ALL in selected_values:
+            selected_paths = [s["path"] for s in sessions]
+        else:
+            selected_paths = [v for v in selected_values if v != _SELECT_ALL]
+            
+        if not selected_paths:
+            return
+    else:
+        selected_paths = [single_selected]
 
     output_dir = Path(output) if output else Path.cwd() / "_transcripts"
 
-    result = generate_html(selected, output_dir)
-    click.echo(
-        f"Generated {result['total_pages']} page(s) with "
-        f"{result['total_requests']} requests in {output_dir}"
-    )
+    if len(selected_paths) == 1:
+        # Single session: write directly into output_dir
+        session_path = selected_paths[0]
+        result = generate_html(session_path, output_dir)
+        click.echo(
+            f"Generated {result['total_pages']} page(s) with "
+            f"{result['total_requests']} requests → {output_dir}"
+        )
+        final_index = result["index_path"]
 
-    if include_json:
-        json_dest = output_dir / Path(selected).name
-        shutil.copy(selected, json_dest)
-        click.echo(f"Copied source JSONL to {json_dest}")
+        if include_json:
+            json_dest = output_dir / Path(session_path).name
+            shutil.copy(session_path, json_dest)
+            click.echo(f"Copied source JSONL to {json_dest}")
+
+    else:
+        # Multi-session: combine generated pages in output_dir under a unified index
+        click.echo(f"Combining {len(selected_paths)} sessions into {output_dir} ...")
+        
+        result = generate_multi_session_html(
+            selected_paths, output_dir, project_title=chosen_project["name"]
+        )
+        click.echo(
+            f"Generated {result['total_pages']} page(s) with "
+            f"{result['total_requests']} requests → {output_dir}"
+        )
+        click.echo(f"Combined index → {result['index_path']}")
+        final_index = result["index_path"]
+        
+        if include_json:
+            for session_path in selected_paths:
+                json_dest = output_dir / Path(session_path).name
+                shutil.copy(session_path, json_dest)
+            click.echo(f"Copied {len(selected_paths)} source JSONL files to {output_dir}")
 
     if gist:
         inject_gist_preview_js(output_dir)
+        if len(selected_paths) > 1:
+            click.echo(
+                "Note: Uploading a multi-session gist with many pages may take time "
+                "or hit API limits."
+            )
         click.echo("Creating GitHub gist...")
         gist_id, gist_url = create_gist(output_dir)
         preview_url = f"https://gisthost.github.io/?{gist_id}/index.html"
         click.echo(f"Gist: {gist_url}")
         click.echo(f"Preview: {preview_url}")
 
-    if open_browser:
-        webbrowser.open(str(result["index_path"]))
+    if open_browser and final_index:
+        webbrowser.open(str(final_index))
+
+
 
 
 @cli.command("json")

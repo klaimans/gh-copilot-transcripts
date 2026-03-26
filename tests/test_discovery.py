@@ -8,7 +8,7 @@ from gh_copilot_transcripts import (
     get_workspace_storage_path,
     get_project_for_workspace,
     find_all_sessions,
-    get_session_title,
+    get_session_info,
 )
 
 
@@ -99,8 +99,8 @@ class TestGetProjectForWorkspace:
         assert result.split("/")[-1] == "my-cool-project"
 
 
-class TestGetSessionTitle:
-    """Test extracting session title from a JSONL file."""
+class TestGetSessionInfo:
+    """Test extracting session title and request count from a JSONL file."""
 
     def _write_session(self, tmp_path, init_v, patches=None):
         path = tmp_path / "session.jsonl"
@@ -114,9 +114,11 @@ class TestGetSessionTitle:
         """Extracts customTitle when present."""
         path = self._write_session(
             tmp_path,
-            {"customTitle": "My Session", "requests": []},
+            {"customTitle": "My Session", "requests": [{"message": {"text": "hello"}}]},
         )
-        assert get_session_title(path) == "My Session"
+        title, req_count = get_session_info(path)
+        assert title == "My Session"
+        assert req_count == 1
 
     def test_title_from_first_request(self, tmp_path):
         """Falls back to first request message text."""
@@ -127,8 +129,9 @@ class TestGetSessionTitle:
                 "requests": [{"message": {"text": "How do I sort a list in Python?"}}],
             },
         )
-        title = get_session_title(path)
+        title, req_count = get_session_info(path)
         assert title == "How do I sort a list in Python?"
+        assert req_count == 1
 
     def test_title_truncated(self, tmp_path):
         """Long titles are truncated."""
@@ -139,27 +142,32 @@ class TestGetSessionTitle:
                 "requests": [{"message": {"text": "x" * 200}}],
             },
         )
-        title = get_session_title(path)
+        title, req_count = get_session_info(path)
         assert len(title) <= 103  # 100 + "..."
+        assert req_count == 1
 
     def test_title_from_patch(self, tmp_path):
         """Title set via a patch is picked up."""
         path = self._write_session(
             tmp_path,
-            {"customTitle": None, "requests": []},
+            {"customTitle": None, "requests": [{"message": {"text": "foo"}}]},
             patches=[
                 {"kind": 1, "k": ["customTitle"], "v": "Patched Title"},
             ],
         )
-        assert get_session_title(path) == "Patched Title"
+        title, req_count = get_session_info(path)
+        assert title == "Patched Title"
+        assert req_count == 1
 
     def test_empty_session(self, tmp_path):
-        """Session with no title and no requests returns fallback."""
+        """Session with no title and no requests returns fallback and 0 count."""
         path = self._write_session(
             tmp_path,
             {"customTitle": None, "requests": []},
         )
-        assert get_session_title(path) == "Untitled session"
+        title, req_count = get_session_info(path)
+        assert title == "Untitled session"
+        assert req_count == 0
 
 
 class TestFindAllSessions:
@@ -193,7 +201,7 @@ class TestFindAllSessions:
                         "kind": 0,
                         "v": {
                             "customTitle": "Session One",
-                            "requests": [],
+                            "requests": [{"message": {"text": "q"}}],
                             "creationDate": 1700000000000,
                         },
                     }
@@ -203,7 +211,7 @@ class TestFindAllSessions:
                         "kind": 0,
                         "v": {
                             "customTitle": "Session Two",
-                            "requests": [],
+                            "requests": [{"message": {"text": "q"}}],
                             "creationDate": 1700001000000,
                         },
                     }
@@ -220,7 +228,7 @@ class TestFindAllSessions:
                         "kind": 0,
                         "v": {
                             "customTitle": "Session Three",
-                            "requests": [],
+                            "requests": [{"message": {"text": "q"}}],
                             "creationDate": 1700002000000,
                         },
                     }
@@ -271,14 +279,14 @@ class TestFindAllSessions:
         chat_dir.mkdir()
         # JSON file should be skipped
         (chat_dir / "old.json").write_text(json.dumps({"requests": []}))
-        # JSONL file should be found
+        # JSONL file should be found (with valid request)
         (chat_dir / "new.jsonl").write_text(
             json.dumps(
                 {
                     "kind": 0,
                     "v": {
                         "customTitle": "JSONL Session",
-                        "requests": [],
+                        "requests": [{"message": {"text": "q"}}],
                         "creationDate": 1700000000000,
                     },
                 }
@@ -289,6 +297,86 @@ class TestFindAllSessions:
         assert len(projects) == 1
         assert len(projects[0]["sessions"]) == 1
         assert projects[0]["sessions"][0]["title"] == "JSONL Session"
+
+    def test_skips_empty_blank_sessions(self, tmp_path):
+        """Sessions with 0 actual requests (created by VS Code on empty tab) are skipped."""
+        ws_root = tmp_path / "workspaceStorage"
+        ws_root.mkdir()
+
+        self._create_workspace(
+            ws_root,
+            "hash1",
+            "file:///Users/foo/project",
+            sessions={
+                "valid.jsonl": [
+                    {
+                        "kind": 0,
+                        "v": {
+                            "customTitle": "Valid",
+                            "requests": [{"message": {"text": "hi"}}],
+                        },
+                    }
+                ],
+                "empty.jsonl": [
+                    {
+                        "kind": 0,
+                        "v": {
+                            "customTitle": None,
+                            "requests": [],
+                        },
+                    }
+                ],
+            },
+        )
+
+        projects = find_all_sessions(ws_root)
+        sessions = projects[0]["sessions"]
+        assert len(sessions) == 1
+        assert sessions[0]["title"] == "Valid"
+
+    def test_projects_sorted_by_most_recent_session(self, tmp_path):
+        """Projects are returned ordered by their most-recent session mtime, newest first."""
+        ws_root = tmp_path / "workspaceStorage"
+        ws_root.mkdir()
+
+        # project-a has an older most-recent session
+        self._create_workspace(
+            ws_root,
+            "hash_a",
+            "file:///Users/foo/project-a",
+            sessions={
+                "old.jsonl": [
+                    {
+                        "kind": 0,
+                        "v": {"customTitle": "Old Session", "requests": [{"message": {"text": "q"}}]},
+                    }
+                ],
+            },
+        )
+        old_path = ws_root / "hash_a" / "chatSessions" / "old.jsonl"
+        os.utime(old_path, (1700000000, 1700000000))
+
+        # project-b has a newer most-recent session
+        self._create_workspace(
+            ws_root,
+            "hash_b",
+            "file:///Users/foo/project-b",
+            sessions={
+                "new.jsonl": [
+                    {
+                        "kind": 0,
+                        "v": {"customTitle": "New Session", "requests": [{"message": {"text": "q"}}]},
+                    }
+                ],
+            },
+        )
+        new_path = ws_root / "hash_b" / "chatSessions" / "new.jsonl"
+        os.utime(new_path, (1700001000, 1700001000))
+
+        projects = find_all_sessions(ws_root)
+        assert len(projects) == 2
+        assert projects[0]["name"] == "project-b"
+        assert projects[1]["name"] == "project-a"
 
     def test_sessions_sorted_by_mtime(self, tmp_path):
         """Sessions within a project are sorted newest first."""
@@ -305,7 +393,7 @@ class TestFindAllSessions:
                         "kind": 0,
                         "v": {
                             "customTitle": "Old Session",
-                            "requests": [],
+                            "requests": [{"message": {"text": "q"}}],
                             "creationDate": 1700000000000,
                         },
                     }
@@ -323,7 +411,7 @@ class TestFindAllSessions:
                     "kind": 0,
                     "v": {
                         "customTitle": "New Session",
-                        "requests": [],
+                        "requests": [{"message": {"text": "q"}}],
                         "creationDate": 1700001000000,
                     },
                 }
